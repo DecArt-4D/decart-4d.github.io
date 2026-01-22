@@ -653,6 +653,117 @@
             loadIframe();
         }
 
+        let pendingPlaybackTime = null;
+
+        function findPlaybackRangeInput(iframeDoc) {
+            const inputs = Array.from(iframeDoc.querySelectorAll('input[type="range"]'));
+            if (inputs.length === 0) return null;
+            const candidates = inputs
+                .map((input) => ({
+                    input,
+                    min: parseFloat(input.min || '0'),
+                    max: parseFloat(input.max || '0'),
+                    step: parseFloat(input.step || '1')
+                }))
+                .filter(({ max }) => Number.isFinite(max) && max > 0)
+                .sort((a, b) => b.max - a.max);
+            return candidates.length > 0 ? candidates[0].input : inputs[0];
+        }
+
+        function findPlaybackNumberInput(iframeDoc) {
+            const inputs = Array.from(
+                iframeDoc.querySelectorAll('input[role="spinbutton"], input[type="text"]')
+            );
+            if (inputs.length === 0) return null;
+            const candidates = inputs.filter((input) => {
+                const value = parseFloat(input.value);
+                return Number.isFinite(value);
+            });
+            return candidates.length > 0 ? candidates[0] : inputs[0];
+        }
+
+        function readPlaybackTimeFromIframe() {
+            try {
+                const iframeDoc = mainIframe.contentDocument;
+                if (!iframeDoc) return null;
+                const rangeInput = findPlaybackRangeInput(iframeDoc);
+                if (rangeInput && rangeInput.value !== '') {
+                    const value = parseFloat(rangeInput.value);
+                    return Number.isFinite(value) ? value : null;
+                }
+                const numberInput = findPlaybackNumberInput(iframeDoc);
+                if (numberInput && numberInput.value !== '') {
+                    const value = parseFloat(numberInput.value);
+                    return Number.isFinite(value) ? value : null;
+                }
+            } catch (err) {
+                console.warn('Could not read iframe playback time:', err);
+            }
+            return null;
+        }
+
+        function clickPlayIfPaused(iframeDoc) {
+            const playIcon = iframeDoc.querySelector(
+                'svg[data-icon="player-play-filled"], svg[class*="player-play-filled"]'
+            );
+            if (!playIcon) return;
+            const button = playIcon.closest('button');
+            if (button) {
+                button.click();
+            }
+        }
+
+        function trySetPlaybackTime(iframeDoc, targetTime) {
+            const rangeInput = findPlaybackRangeInput(iframeDoc);
+            if (rangeInput) {
+                const min = parseFloat(rangeInput.min || '0');
+                const max = parseFloat(rangeInput.max || `${targetTime}`);
+                const clamped = Math.min(Math.max(targetTime, min), max);
+                rangeInput.value = String(clamped);
+                rangeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                rangeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+
+            const numberInput = findPlaybackNumberInput(iframeDoc);
+            if (numberInput) {
+                numberInput.value = targetTime.toFixed(1);
+                numberInput.dispatchEvent(new Event('input', { bubbles: true }));
+                numberInput.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+
+            return false;
+        }
+
+        function seekPlaybackTimeWhenReady(targetTime) {
+            if (!Number.isFinite(targetTime)) return;
+            let attempts = 0;
+            const maxAttempts = 60;
+            const interval = setInterval(() => {
+                attempts += 1;
+                try {
+                    const iframeDoc = mainIframe.contentDocument;
+                    if (!iframeDoc) return;
+                    if (trySetPlaybackTime(iframeDoc, targetTime)) {
+                        const current = readPlaybackTimeFromIframe();
+                        if (current !== null && Math.abs(current - targetTime) <= 0.05) {
+                            clickPlayIfPaused(iframeDoc);
+                            pendingPlaybackTime = null;
+                            clearInterval(interval);
+                            return;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Could not seek iframe playback time:', err);
+                }
+
+                if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                }
+            }, 100);
+        }
+
         // Load iframe with current scene and decay level
         function loadIframe() {
             if (scenes.length === 0) return;
@@ -663,6 +774,11 @@
 
             // Show loader
             iframeLoader.classList.remove('hidden');
+
+            const lastTime = readPlaybackTimeFromIframe();
+            if (Number.isFinite(lastTime)) {
+                pendingPlaybackTime = lastTime;
+            }
 
             // Build URL - ensure proper base URL construction
             let baseUrl = window.location.origin;
@@ -698,11 +814,11 @@
                     const iframeDoc = mainIframe.contentDocument;
                     if (!iframeDoc) return;
                     const primary = getComputedStyle(document.documentElement)
-                        .getPropertyValue('--mantine-slider-color')
-                        .trim();
-                    if (primary) {
-                        iframeDoc.documentElement.style.setProperty('--mantine-slider-color', primary);
-                    }
+                        .getPropertyValue('--maintine-primary-color')
+                        .trim()
+                        || getComputedStyle(document.documentElement)
+                            .getPropertyValue('--mantine-slider-color')
+                            .trim();
                     let styleTag = iframeDoc.getElementById('progressColorOverride');
                     if (!styleTag) {
                         styleTag = iframeDoc.createElement('style');
@@ -711,7 +827,7 @@
                     }
                     styleTag.textContent = `
                         .mantine-Slider-bar {
-                            background-color: var(--mantine-slider-color) !important;
+                            background-color: ${primary || '#ffffff'} !important;
                         }
                     `;
                 } catch (err) {
