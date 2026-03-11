@@ -88,7 +88,7 @@
 
         /* Banner */
         .banner {
-            padding: 140px 0 80px;
+            padding: 140px 0 40px;
             /* background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); */
             background: var(--bg-color);
             color: white;
@@ -208,7 +208,7 @@
             position: relative;
             width: 100%;
             /* height: 432px; */
-            max-width: 1600px;
+            max-width: 1520px;
             margin: 0 auto 30px;
             aspect-ratio: 16 / 10;
             background: var(--bg-color);
@@ -524,7 +524,7 @@
     </section>
 
     <!-- TL;DR -->
-    <section id="overview">
+    <section id="overview" style="padding-top: 0;">
         <div class="container">
             <div class="tldr-content">
                 <p>
@@ -532,6 +532,18 @@
                     DecArt, a computational simulation of the fragility of memory in the face of entropic loss.
                     <!-- Update with actual project description -->
                 </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Video -->
+    <section class="demo-video" style="padding-top: 0;">
+        <div class="container">
+            <div style="max-width: 1520px; margin: 0 auto;">
+                <video autoplay muted loop playsinline controls
+                    style="width: 100%; display: block; border-radius: 12px;">
+                    <source src="assets/DecArt_Demo.mp4" type="video/mp4">
+                </video>
             </div>
         </div>
     </section>
