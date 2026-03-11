@@ -625,6 +625,10 @@
         // State
         let currentScene = 0;
         let currentDecay = 0;
+        let globalTime = 0;       // single global playback position across all decay levels
+        let globalIsPaused = false;
+        let activeKey = '0_0';    // tracks the actually-displayed iframe key
+        let isSwitching = false;  // guard: stop polling from corrupting state during switch
 
         // DOM Elements
         const iframeLoader = document.getElementById('iframeLoader');
@@ -659,6 +663,74 @@
             const playbackUrl = `${baseUrl}${viserFile}`;
             const cameraParams = scene.cameraParams || '';
             return `${baseUrl}build/?playbackPath=${encodeURIComponent(playbackUrl)}${cameraParams ? '&' + cameraParams : ''}`;
+        }
+
+        // Click the play/pause button inside viser
+        function clickPlayPause(iframe) {
+            try {
+                const iframeDoc = iframe.contentDocument;
+                if (!iframeDoc) return;
+                const icon = iframeDoc.querySelector('[class*="player-play"], [class*="player-pause"]');
+                if (icon) {
+                    const btn = icon.closest('button');
+                    if (btn) btn.click();
+                }
+            } catch (e) {}
+        }
+
+        // Reconcile actual play/pause state with globalIsPaused
+        // Seek (mousedown/mouseup) always causes viser to pause, so we must restore desired state after seek
+        function applyPlayState(iframe) {
+            try {
+                const iframeDoc = iframe.contentDocument;
+                if (!iframeDoc) return;
+                const isCurrentlyPaused = !!iframeDoc.querySelector('[class*="player-play"]');
+                if (globalIsPaused !== isCurrentlyPaused) {
+                    clickPlayPause(iframe);
+                }
+            } catch (e) {}
+        }
+
+        // Seek viser's Mantine playback slider to a given time via mouse events
+        function seekIframeTo(iframe, time) {
+            if (!Number.isFinite(time)) return;
+            try {
+                const iframeDoc = iframe.contentDocument;
+                if (!iframeDoc) return;
+
+                // Mantine Slider: read range from aria attributes, simulate mousedown/mouseup on track
+                const thumb = iframeDoc.querySelector('.mantine-Slider-thumb');
+                if (thumb) {
+                    const ariaMax = parseFloat(thumb.getAttribute('aria-valuemax') || '0');
+                    const ariaMin = parseFloat(thumb.getAttribute('aria-valuemin') || '0');
+                    const root = thumb.closest('.mantine-Slider-root');
+                    const track = root && root.querySelector('.mantine-Slider-track');
+                    if (track && ariaMax > ariaMin) {
+                        const rect = track.getBoundingClientRect();
+                        if (rect.width > 0) {
+                            const ratio = Math.min(Math.max((time - ariaMin) / (ariaMax - ariaMin), 0), 1);
+                            const clientX = rect.left + rect.width * ratio;
+                            const clientY = rect.top + rect.height / 2;
+                            track.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX, clientY }));
+                            track.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX, clientY }));
+                            return;
+                        }
+                    }
+                }
+
+                // Fallback: native range input
+                const inputs = Array.from(iframeDoc.querySelectorAll('input[type="range"]'));
+                for (const input of inputs) {
+                    if (parseFloat(input.max || '0') > 0) {
+                        const min = parseFloat(input.min || '0');
+                        const max = parseFloat(input.max);
+                        input.value = String(Math.min(Math.max(time, min), max));
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                        break;
+                    }
+                }
+            } catch (e) {}
         }
 
         function applyColorOverride(iframe) {
@@ -702,9 +774,14 @@
             iframe.onload = () => {
                 entry.loaded = true;
                 applyColorOverride(iframe);
-                if (sceneIndex === currentScene && decayIndex === currentDecay) {
+                const myKey = `${sceneIndex}_${decayIndex}`;
+                if (myKey === activeKey) {
                     iframeLoader.classList.add('hidden');
-                    PlaybackSync.restorePlaybackTime(iframe);
+                    seekIframeTo(iframe, globalTime);
+                    setTimeout(() => {
+                        applyPlayState(iframe);
+                        isSwitching = false;
+                    }, 200);
                 } else {
                     pauseIframe(iframe);
                 }
@@ -747,6 +824,10 @@
             const key = `${sceneIndex}_${decayIndex}`;
             const targetEntry = iframePool[key];
 
+            // Freeze polling so globalTime/globalIsPaused aren't corrupted during switch
+            isSwitching = true;
+            activeKey = key;
+
             Object.values(iframePool).forEach(entry => {
                 if (entry !== targetEntry) {
                     entry.iframe.classList.add('hidden-iframe');
@@ -754,15 +835,27 @@
                 }
             });
 
-            if (!targetEntry) return;
+            if (!targetEntry) {
+                isSwitching = false;
+                return;
+            }
 
             targetEntry.iframe.classList.remove('hidden-iframe');
-            resumeIframe(targetEntry.iframe);
 
             if (targetEntry.loaded) {
                 iframeLoader.classList.add('hidden');
+                // Seek to correct frame BEFORE resuming RAF
+                seekIframeTo(targetEntry.iframe, globalTime);
+                resumeIframe(targetEntry.iframe);
+                // Apply pause state, then unfreeze polling
+                setTimeout(() => {
+                    applyPlayState(targetEntry.iframe);
+                    isSwitching = false;
+                }, 200);
             } else {
+                resumeIframe(targetEntry.iframe);
                 iframeLoader.classList.remove('hidden');
+                // isSwitching cleared in onload
             }
         }
 
@@ -824,6 +917,19 @@
             getOrCreateIframe(currentScene, currentDecay);
             showIframe(currentScene, currentDecay);
         });
+
+        // Poll active iframe every 100ms: keep globalTime and globalIsPaused in sync
+        setInterval(() => {
+            if (isSwitching) return; // don't corrupt state during switch
+            const entry = iframePool[activeKey];
+            if (!entry || !entry.loaded) return;
+            try {
+                const t = PlaybackSync.readPlaybackTime(entry.iframe);
+                if (Number.isFinite(t)) globalTime = t;
+                const iframeDoc = entry.iframe.contentDocument;
+                if (iframeDoc) globalIsPaused = !!iframeDoc.querySelector('[class*="player-play"]');
+            } catch (e) {}
+        }, 100);
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
