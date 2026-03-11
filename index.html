@@ -540,7 +540,7 @@
     <section class="demo-video" style="padding-top: 0;">
         <div class="container">
             <div style="max-width: 1520px; margin: 0 auto;">
-                <video autoplay muted loop playsinline controls
+                <video autoplay muted playsinline controls
                     style="width: 100%; display: block; border-radius: 12px;">
                     <source src="assets/DecArt_Demo.mp4" type="video/mp4">
                 </video>
@@ -705,6 +705,8 @@
                 if (sceneIndex === currentScene && decayIndex === currentDecay) {
                     iframeLoader.classList.add('hidden');
                     PlaybackSync.restorePlaybackTime(iframe);
+                } else {
+                    pauseIframe(iframe);
                 }
             };
 
@@ -712,19 +714,52 @@
             return entry;
         }
 
+        // Pause a background iframe's render loop by intercepting requestAnimationFrame
+        function pauseIframe(iframe) {
+            try {
+                const win = iframe.contentWindow;
+                if (!win || win._rafPaused) return;
+                win._originalRAF = win.requestAnimationFrame.bind(win);
+                win._pendingRAF = [];
+                win.requestAnimationFrame = (cb) => {
+                    win._pendingRAF.push(cb);
+                    return win._pendingRAF.length;
+                };
+                win._rafPaused = true;
+            } catch (e) {}
+        }
+
+        // Resume a paused iframe's render loop
+        function resumeIframe(iframe) {
+            try {
+                const win = iframe.contentWindow;
+                if (!win || !win._rafPaused) return;
+                win.requestAnimationFrame = win._originalRAF;
+                win._rafPaused = false;
+                const pending = win._pendingRAF || [];
+                win._pendingRAF = [];
+                pending.forEach(cb => win.requestAnimationFrame(cb));
+            } catch (e) {}
+        }
+
         // Show the iframe for a given scene + decay, hide all others
         function showIframe(sceneIndex, decayIndex) {
+            const key = `${sceneIndex}_${decayIndex}`;
+            const targetEntry = iframePool[key];
+
             Object.values(iframePool).forEach(entry => {
-                entry.iframe.classList.add('hidden-iframe');
+                if (entry !== targetEntry) {
+                    entry.iframe.classList.add('hidden-iframe');
+                    pauseIframe(entry.iframe);
+                }
             });
 
-            const key = `${sceneIndex}_${decayIndex}`;
-            const entry = iframePool[key];
-            if (!entry) return;
+            if (!targetEntry) return;
 
-            entry.iframe.classList.remove('hidden-iframe');
+            targetEntry.iframe.classList.remove('hidden-iframe');
+            resumeIframe(targetEntry.iframe);
 
-            if (entry.loaded) {
+            if (targetEntry.loaded) {
                 iframeLoader.classList.add('hidden');
             } else {
                 iframeLoader.classList.remove('hidden');
