@@ -1,4 +1,10 @@
 .*/
+*pkl/
 .md
+*.ply
+*.npz
+*.npy
+*.pkl
+test_*
 *_web.html
 *_streaming.py
