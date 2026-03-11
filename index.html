@@ -218,9 +218,19 @@
         }
 
         .main-iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             border: none;
+            z-index: 1;
+        }
+
+        .main-iframe.hidden-iframe {
+            visibility: hidden;
+            pointer-events: none;
+            z-index: 0;
         }
 
         .iframe-loader {
@@ -553,7 +563,6 @@
                     <div class="loader-spinner"></div>
                     <div class="loader-text">Loading interactive demo...</div>
                 </div>
-                <iframe id="mainIframe" class="main-iframe" src=""></iframe>
             </div>
 
             <!-- Decay Level Control -->
@@ -606,18 +615,124 @@
         let currentDecay = 0;
 
         // DOM Elements
-        const mainIframe = document.getElementById('mainIframe');
         const iframeLoader = document.getElementById('iframeLoader');
+        const mainDisplayContainer = document.querySelector('.main-display-container');
         const thumbnailGallery = document.getElementById('thumbnailGallery');
         const decaySlider = document.getElementById('decaySlider');
         const decayValue = document.getElementById('decayValue');
+
+        // Iframe pool: key = `${sceneIndex}_${decayIndex}` → { iframe, loaded }
+        const iframePool = {};
+
+        // Build base URL
+        function getBaseUrl() {
+            let baseUrl = window.location.origin;
+            const pathname = window.location.pathname;
+            if (pathname && pathname !== '/') {
+                const pathParts = pathname.split('/');
+                if (pathParts[pathParts.length - 1].includes('.')) {
+                    pathParts.pop();
+                }
+                baseUrl += pathParts.join('/');
+            }
+            if (!baseUrl.endsWith('/')) baseUrl += '/';
+            return baseUrl;
+        }
+
+        function buildIframeUrl(sceneIndex, decayIndex) {
+            const scene = scenes[sceneIndex];
+            const decay = decayLevels[decayIndex];
+            const baseUrl = getBaseUrl();
+            const viserFile = `${scene.viserPath}/decay_${decay.toFixed(1)}.viser`;
+            const playbackUrl = `${baseUrl}${viserFile}`;
+            const cameraParams = scene.cameraParams || '';
+            return `${baseUrl}build/?playbackPath=${encodeURIComponent(playbackUrl)}${cameraParams ? '&' + cameraParams : ''}`;
+        }
+
+        function applyColorOverride(iframe) {
+            try {
+                const iframeDoc = iframe.contentDocument;
+                if (!iframeDoc) return;
+                const primary = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--mantine-primary-color').trim()
+                    || getComputedStyle(document.documentElement)
+                        .getPropertyValue('--mantine-slider-color').trim();
+                let styleTag = iframeDoc.getElementById('progressColorOverride');
+                if (!styleTag) {
+                    styleTag = iframeDoc.createElement('style');
+                    styleTag.id = 'progressColorOverride';
+                    iframeDoc.head.appendChild(styleTag);
+                }
+                styleTag.textContent = `
+                    .mantine-Slider-bar { background-color: ${primary || '#ffffff'} !important; }
+                    .mantine-Slider-track { background-color: ${primary || '#ffffff'}33 !important; }
+                    .mantine-Slider-track::before { background-color: ${primary || '#ffffff'}33 !important; }
+                    .mantine-Progress-section { background-color: ${primary || '#ffffff'}55 !important; }
+                    .mantine-Progress-root { background-color: ${primary || '#ffffff'}33 !important; }
+                `;
+            } catch (err) {
+                console.warn('Could not override iframe progress color:', err);
+            }
+        }
+
+        // Get or create a pooled iframe for a given scene + decay level
+        function getOrCreateIframe(sceneIndex, decayIndex) {
+            const key = `${sceneIndex}_${decayIndex}`;
+            if (iframePool[key]) return iframePool[key];
+
+            const iframe = document.createElement('iframe');
+            iframe.className = 'main-iframe hidden-iframe';
+            mainDisplayContainer.appendChild(iframe);
+
+            const entry = { iframe, loaded: false };
+            iframePool[key] = entry;
+
+            iframe.onload = () => {
+                entry.loaded = true;
+                applyColorOverride(iframe);
+                if (sceneIndex === currentScene && decayIndex === currentDecay) {
+                    iframeLoader.classList.add('hidden');
+                    PlaybackSync.restorePlaybackTime(iframe);
+                }
+            };
+
+            iframe.src = buildIframeUrl(sceneIndex, decayIndex);
+            return entry;
+        }
+
+        // Show the iframe for a given scene + decay, hide all others
+        function showIframe(sceneIndex, decayIndex) {
+            Object.values(iframePool).forEach(entry => {
+                entry.iframe.classList.add('hidden-iframe');
+            });
+
+            const key = `${sceneIndex}_${decayIndex}`;
+            const entry = iframePool[key];
+            if (!entry) return;
+
+            entry.iframe.classList.remove('hidden-iframe');
+
+            if (entry.loaded) {
+                iframeLoader.classList.add('hidden');
+            } else {
+                iframeLoader.classList.remove('hidden');
+            }
+        }
+
+        // Preload all decay levels for a scene in the background (staggered)
+        function preloadScene(sceneIndex) {
+            decayLevels.forEach((_, decayIndex) => {
+                setTimeout(() => {
+                    getOrCreateIframe(sceneIndex, decayIndex);
+                }, decayIndex * 500);
+            });
+        }
 
         // Initialize thumbnails
         function initThumbnails() {
             thumbnailGallery.innerHTML = '';
 
             if (scenes.length === 0) {
-                // Placeholder when no scenes are configured
                 thumbnailGallery.innerHTML = `
                     <div style="text-align: center; color: var(--text-dark); padding: 20px;">
                         <p>No scenes configured yet.</p>
@@ -645,114 +760,31 @@
 
             currentScene = index;
 
-            // Update active thumbnail
             document.querySelectorAll('.thumbnail-item').forEach((item, i) => {
                 item.classList.toggle('active', i === index);
             });
 
-            // Load iframe
-            loadIframe();
-        }
-
-        // Load iframe with current scene and decay level
-        function loadIframe() {
-            if (scenes.length === 0) return;
-
-            const scene = scenes[currentScene];
-            const decay = decayLevels[currentDecay];
-            const viserFile = `${scene.viserPath}/decay_${decay.toFixed(1)}.viser`;
-
-            // Show loader
-            iframeLoader.classList.remove('hidden');
-
-            // Save current playback time before switching
-            PlaybackSync.savePlaybackTime(mainIframe);
-
-            // Build URL - ensure proper base URL construction
-            let baseUrl = window.location.origin;
-            const pathname = window.location.pathname;
-            // Handle both root and subdirectory deployments
-            if (pathname && pathname !== '/') {
-                // Remove trailing filename if present (e.g., index.html)
-                const pathParts = pathname.split('/');
-                if (pathParts[pathParts.length - 1].includes('.')) {
-                    pathParts.pop();
-                }
-                baseUrl += pathParts.join('/');
-            }
-            // Ensure trailing slash
-            if (!baseUrl.endsWith('/')) {
-                baseUrl += '/';
-            }
-
-            const playbackUrl = `${baseUrl}${viserFile}`;
-
-            // Initial camera parameters (adjust as needed per scene)
-            const cameraParams = scene.cameraParams || '';
-            const iframeUrl = `${baseUrl}build/?playbackPath=${encodeURIComponent(playbackUrl)}${cameraParams ? '&' + cameraParams : ''}`;
-
-            console.log('Loading viser:', { baseUrl, viserFile, playbackUrl, iframeUrl, cameraParams });
-
-            mainIframe.src = iframeUrl;
-
-            // Hide loader when iframe loads
-            mainIframe.onload = () => {
-                iframeLoader.classList.add('hidden');
-
-                // Restore playback time from before the switch
-                PlaybackSync.restorePlaybackTime(mainIframe);
-
-                try {
-                    const iframeDoc = mainIframe.contentDocument;
-                    if (!iframeDoc) return;
-                    const primary = getComputedStyle(document.documentElement)
-                        .getPropertyValue('--mantine-primary-color')
-                        .trim()
-                        || getComputedStyle(document.documentElement)
-                            .getPropertyValue('--mantine-slider-color')
-                            .trim();
-                    let styleTag = iframeDoc.getElementById('progressColorOverride');
-                    if (!styleTag) {
-                        styleTag = iframeDoc.createElement('style');
-                        styleTag.id = 'progressColorOverride';
-                        iframeDoc.head.appendChild(styleTag);
-                    }
-                    styleTag.textContent = `
-                        .mantine-Slider-bar {
-                            background-color: ${primary || '#ffffff'} !important;
-                        }
-                        .mantine-Slider-track {
-                            background-color: ${primary || '#ffffff'}33 !important;
-                        }
-                        .mantine-Slider-track::before {
-                            background-color: ${primary || '#ffffff'}33 !important;
-                        }
-                        .mantine-Progress-section {
-                            background-color: ${primary || '#ffffff'}55 !important;
-                        }
-                        .mantine-Progress-root {
-                            background-color: ${primary || '#ffffff'}33 !important;
-                        }
-                    `;
-                } catch (err) {
-                    console.warn('Could not override iframe progress color:', err);
-                }
-            };
+            getOrCreateIframe(index, currentDecay);
+            showIframe(index, currentDecay);
+            preloadScene(index);
         }
 
         // Decay slider handler
         decaySlider.addEventListener('input', (e) => {
             currentDecay = parseInt(e.target.value);
-            const decayVal = decayLevels[currentDecay];
-            decayValue.textContent = decayVal.toFixed(1);
-            loadIframe();
+            decayValue.textContent = decayLevels[currentDecay].toFixed(1);
+
+            getOrCreateIframe(currentScene, currentDecay);
+            showIframe(currentScene, currentDecay);
         });
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             initThumbnails();
             if (scenes.length > 0) {
-                loadIframe();
+                getOrCreateIframe(0, 0);
+                showIframe(0, 0);
+                preloadScene(0);
             }
         });
     </script>
