@@ -778,10 +778,18 @@
                 if (myKey === activeKey) {
                     iframeLoader.classList.add('hidden');
                     seekIframeTo(iframe, globalTime);
-                    setTimeout(() => {
-                        applyPlayState(iframe);
-                        isSwitching = false;
-                    }, 200);
+                    // Poll until actual frame converges instead of fixed 200ms
+                    let attempts = 0;
+                    const poll = setInterval(() => {
+                        attempts++;
+                        const actualTime = PlaybackSync.readPlaybackTime(iframe);
+                        const converged = Number.isFinite(actualTime) && Math.abs(actualTime - globalTime) < 0.1;
+                        if (converged || attempts >= 20) {
+                            clearInterval(poll);
+                            applyPlayState(iframe);
+                            isSwitching = false;
+                        }
+                    }, 50);
                 } else {
                     pauseIframe(iframe);
                 }
@@ -824,37 +832,51 @@
             const key = `${sceneIndex}_${decayIndex}`;
             const targetEntry = iframePool[key];
 
+            if (!targetEntry) return;
+
             // Freeze polling so globalTime/globalIsPaused aren't corrupted during switch
             isSwitching = true;
-            activeKey = key;
-
-            Object.values(iframePool).forEach(entry => {
-                if (entry !== targetEntry) {
-                    entry.iframe.classList.add('hidden-iframe');
-                    pauseIframe(entry.iframe);
-                }
-            });
-
-            if (!targetEntry) {
-                isSwitching = false;
-                return;
-            }
-
-            targetEntry.iframe.classList.remove('hidden-iframe');
 
             if (targetEntry.loaded) {
                 iframeLoader.classList.add('hidden');
-                // Seek to correct frame BEFORE resuming RAF
-                seekIframeTo(targetEntry.iframe, globalTime);
+                // Resume RAF on new iframe while still visibility:hidden (layout intact for BoundingClientRect)
                 resumeIframe(targetEntry.iframe);
-                // Apply pause state, then unfreeze polling
-                setTimeout(() => {
-                    applyPlayState(targetEntry.iframe);
-                    isSwitching = false;
-                }, 200);
+                // Seek to target frame while hidden — no flicker
+                seekIframeTo(targetEntry.iframe, globalTime);
+                // Poll until actual frame converges, then swap visibility
+                let attempts = 0;
+                const poll = setInterval(() => {
+                    attempts++;
+                    const actualTime = PlaybackSync.readPlaybackTime(targetEntry.iframe);
+                    const converged = Number.isFinite(actualTime) && Math.abs(actualTime - globalTime) < 0.1;
+                    if (converged || attempts >= 20) {
+                        clearInterval(poll);
+                        applyPlayState(targetEntry.iframe);
+                        // Show new iframe only after it's in the right state
+                        targetEntry.iframe.classList.remove('hidden-iframe');
+                        // Now hide + pause all others
+                        Object.values(iframePool).forEach(entry => {
+                            if (entry !== targetEntry) {
+                                entry.iframe.classList.add('hidden-iframe');
+                                pauseIframe(entry.iframe);
+                            }
+                        });
+                        activeKey = key;
+                        isSwitching = false;
+                    }
+                }, 50);
             } else {
+                // Not loaded yet: swap immediately, show spinner
+                Object.values(iframePool).forEach(entry => {
+                    if (entry !== targetEntry) {
+                        entry.iframe.classList.add('hidden-iframe');
+                        pauseIframe(entry.iframe);
+                    }
+                });
+                targetEntry.iframe.classList.remove('hidden-iframe');
                 resumeIframe(targetEntry.iframe);
                 iframeLoader.classList.remove('hidden');
+                activeKey = key;
                 // isSwitching cleared in onload
             }
         }
