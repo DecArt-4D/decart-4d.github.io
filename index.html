@@ -616,7 +616,18 @@
                 viserPath: "assets/viser/train_cc829c4d",
                 cameraParams: "initialCameraPosition=-0.5,7,-1&initialCameraLookAt=0.000,0.000,0.000&initialCameraUp=0,0,1&initialCameraFov=0.8727&initDistanceScale=1&darkMode=1"
             },
-            // { name: "Scene 2", thumbnail: "assets/thumbnails/scene2.jpg", viserPath: "assets/viser/scene2" },
+            {
+                name: "Scene 2: blackswan",
+                thumbnail: "assets/thumbnails/blackswan.jpg",
+                viserPath: "assets/viser/blackswan_7e6cfd02",
+                cameraParams: "initialCameraPosition=-0.5,7,-1&initialCameraLookAt=0.000,0.000,0.000&initialCameraUp=0,0,1&initialCameraFov=0.8727&initDistanceScale=1&darkMode=1"
+            },
+            {
+                name: "Scene 3: horsejump-high",
+                thumbnail: "assets/thumbnails/horsejump-high.jpg",
+                viserPath: "assets/viser/horsejump-high_fcfcbd89",
+                cameraParams: "initialCameraPosition=-3,14,-2&initialCameraLookAt=0.000,0.000,0.000&initialCameraUp=0,0,1&initialCameraFov=0.8727&initDistanceScale=1&darkMode=1"
+            },
         ];
 
         // Decay levels available (0.0 to 1.0 in steps of 0.1)
@@ -757,6 +768,20 @@
             } catch (err) {
                 console.warn('Could not override iframe progress color:', err);
             }
+        }
+
+        // Remove all iframes that don't belong to the given scene
+        function clearOtherScenes(keepSceneIndex) {
+            Object.keys(iframePool).forEach(key => {
+                const [sceneStr] = key.split('_');
+                if (parseInt(sceneStr) !== keepSceneIndex) {
+                    const entry = iframePool[key];
+                    pauseIframe(entry.iframe);
+                    entry.iframe.src = 'about:blank';
+                    entry.iframe.remove();
+                    delete iframePool[key];
+                }
+            });
         }
 
         // Get or create a pooled iframe for a given scene + decay level
@@ -920,7 +945,12 @@
         function switchScene(index) {
             if (index < 0 || index >= scenes.length) return;
 
+            // Clear iframes from previous scene to free GPU memory
+            clearOtherScenes(index);
+
             currentScene = index;
+            globalTime = 0;
+            globalIsPaused = false;
 
             document.querySelectorAll('.thumbnail-item').forEach((item, i) => {
                 item.classList.toggle('active', i === index);

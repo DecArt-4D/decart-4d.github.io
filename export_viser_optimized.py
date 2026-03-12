@@ -35,6 +35,7 @@ def export_single_pkl(
     downsample: float = 1.0,
     use_fp16: bool = False,
     frame_step: int = 1,
+    scale: float = 1.0,
 ):
     """
     Export a single viser_cache.pkl to .viser format.
@@ -48,6 +49,7 @@ def export_single_pkl(
         downsample: Fraction of points to keep (0.0-1.0), e.g. 0.5 = keep 50%
         use_fp16: Whether to use float16 for point cloud coordinates (smaller files)
         frame_step: Take every Nth frame (e.g. 2 = keep half the frames)
+        scale: Scale factor for the scene (e.g. 0.125 to shrink 8x)
     """
     import viser
 
@@ -214,6 +216,8 @@ def export_single_pkl(
         # Transform points to glTF coordinate system
         pts_transformed = transform_opencv_to_gltf(pts) - center_offset
         pts_transformed = (world_rot_mat @ pts_transformed.T).T + world_shift_vec
+        if scale != 1.0:
+            pts_transformed *= scale
 
         # Ensure colors are in correct format (0-255 uint8)
         if isinstance(clrs, np.ndarray):
@@ -238,6 +242,8 @@ def export_single_pkl(
         # Add camera frustum - use float32
         cam_pos = frame["cam_pos"].astype(np.float32) - center_offset
         cam_pos = world_rot_mat @ cam_pos + world_shift_vec
+        if scale != 1.0:
+            cam_pos *= scale
         cam_quat = frame["cam_quat"].astype(np.float32)
 
         # Normalize quaternion defensively
@@ -322,6 +328,7 @@ def export_project_dir(
     downsample: float = 1.0,
     use_fp16: bool = False,
     frame_step: int = 1,
+    scale: float = 1.0,
 ):
     """
     Export all decay levels from a project directory.
@@ -375,6 +382,7 @@ def export_project_dir(
                 downsample=downsample,
                 use_fp16=use_fp16,
                 frame_step=frame_step,
+                scale=scale,
             )
         except Exception as e:
             print(f"  Error exporting {decay_name}: {e}")
@@ -434,6 +442,7 @@ def main():
     parser.add_argument("--downsample", type=float, default=1.0, help="Fraction of points to keep (0.0-1.0), e.g. 0.5 = 50%%")
     parser.add_argument("--fp16", action="store_true", help="Use float16 for point cloud coordinates (smaller files)")
     parser.add_argument("--frame-step", type=int, default=1, help="Take every Nth frame (e.g. 2 = keep half the frames)")
+    parser.add_argument("--scale", type=float, default=1.0, help="Scale factor for scene (e.g. 0.125 to shrink 8x)")
 
     args = parser.parse_args()
 
@@ -462,6 +471,7 @@ def main():
             downsample=args.downsample,
             use_fp16=use_fp16,
             frame_step=frame_step,
+            scale=args.scale,
         )
     elif args.input_dir:
         # Directory export
@@ -483,6 +493,7 @@ def main():
             downsample=args.downsample,
             use_fp16=use_fp16,
             frame_step=frame_step,
+            scale=args.scale,
         )
     else:
         parser.print_help()
