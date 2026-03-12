@@ -36,6 +36,7 @@ def export_single_pkl(
     use_fp16: bool = False,
     frame_step: int = 1,
     scale: float = 1.0,
+    center_override: "np.ndarray | None" = None,
 ):
     """
     Export a single viser_cache.pkl to .viser format.
@@ -100,13 +101,16 @@ def export_single_pkl(
 
     # Optional recentering to put the scene near origin for better default view
     # Use float32 for all calculations to save memory
-    center_offset = np.zeros(3, dtype=np.float32)
-    if center_mode != "none":
-        ref_pts = frames[0]["points"].astype(np.float32)
-        if center_mode == "first_bbox":
-            center_offset = (ref_pts.min(axis=0) + ref_pts.max(axis=0)) * 0.5
-        elif center_mode == "first_mean":
-            center_offset = ref_pts.mean(axis=0)
+    if center_override is not None:
+        center_offset = center_override.astype(np.float32)
+    else:
+        center_offset = np.zeros(3, dtype=np.float32)
+        if center_mode != "none":
+            ref_pts = frames[0]["points"].astype(np.float32)
+            if center_mode == "first_bbox":
+                center_offset = (ref_pts.min(axis=0) + ref_pts.max(axis=0)) * 0.5
+            elif center_mode == "first_mean":
+                center_offset = ref_pts.mean(axis=0)
 
     # DA3 writes aligned world coords and c2w quats. Optional OpenCV->WebGL flip.
     def transform_opencv_to_gltf(points):
@@ -344,6 +348,21 @@ def export_project_dir(
 
     os.makedirs(output_dir, exist_ok=True)
 
+    # Compute shared center offset from decay_0.0 so all decay levels are aligned
+    shared_center = None
+    if center_mode != "none":
+        ref_pkl = os.path.join(decay_dirs[0], "viser_cache.pkl")
+        if os.path.exists(ref_pkl):
+            with open(ref_pkl, 'rb') as f:
+                ref_frames = pickle.load(f)
+            ref_pts = ref_frames[0]["points"].astype(np.float32)
+            if center_mode == "first_bbox":
+                shared_center = (ref_pts.min(axis=0) + ref_pts.max(axis=0)) * 0.5
+            elif center_mode == "first_mean":
+                shared_center = ref_pts.mean(axis=0)
+            print(f"Using shared center from {os.path.basename(decay_dirs[0])}: {shared_center}")
+            del ref_frames
+
     for decay_dir in decay_dirs:
         pkl_path = os.path.join(decay_dir, "viser_cache.pkl")
         if not os.path.exists(pkl_path):
@@ -383,6 +402,7 @@ def export_project_dir(
                 use_fp16=use_fp16,
                 frame_step=frame_step,
                 scale=scale,
+                center_override=shared_center,
             )
         except Exception as e:
             print(f"  Error exporting {decay_name}: {e}")
