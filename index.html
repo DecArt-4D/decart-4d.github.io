@@ -955,7 +955,7 @@
                 item.className = `thumbnail-item${index === 0 ? ' active' : ''}`;
                 item.innerHTML = `
                     <img src="${scene.thumbnail}" alt="${scene.name}" onerror="this.style.background='linear-gradient(135deg, #667eea 0%, #764ba2 100%)'">
-                    <div class="thumbnail-label">${scene.name}</div>
+                    <div class="thumbnail-label">${scene.name.replace(': ', ':<br>')}</div>
                 `;
                 item.onclick = () => switchScene(index);
                 thumbnailGallery.appendChild(item);
