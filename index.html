@@ -7,6 +7,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* CSS Variables for Theming */
         :root {
             --primary-color: #6366f1;
             --primary-dark: #4f46e5;
@@ -195,6 +196,20 @@
         }
 
         .abstract-content p {
+            color: var(--text-dark);
+            text-align: justify;
+        }
+
+        /* Method / Further Reading */
+        .method-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: var(--bg-color);
+            padding: 0 40px 40px;
+            border-radius: 12px;
+        }
+
+        .method-content p {
             color: var(--text-dark);
             text-align: justify;
         }
@@ -478,6 +493,10 @@
         }
     </style>
     <script src="assets/js/playback-sync.js"></script>
+    <script>
+        MathJax = { tex: { inlineMath: [['$', '$']] } };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
 </head>
 <body>
     <!-- Navbar -->
@@ -558,6 +577,63 @@
                     <!-- Abstract text -->
                     Memory is not merely the storage of data; it is the scaffolding of reality. When biological memory fades, the world does not simply turn black; it regresses into an unrecognizable chaos. <strong>Echoes of the Prior</strong> is an interactive installation that attempts to visualize this subjective phenomenology of forgetting. By inducing controlled synaptic decay within a Feed-Forward 3D Reconstruction model, we simulate the erosion of the brain's predictive priors. We position the Neural Network not as a tool for engineering, but as a cognitive proxy - a silicon brain whose structural degeneration offers us a glimpse into the disorienting, poetic, and terrifying experience of losing one's grip on the world. Ultimately, we offer this framework as a catalyst, inviting the wider community to explore the uncharted potential of neuromorphic aesthetics in visualizing the fragility of intelligence. 
                 </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Further Reading -->
+    <section style="padding-top: 0;">
+        <div class="container">
+            <div class="method-content">
+                <details>
+                    <summary style="cursor: pointer; font-size: 1.2rem; font-weight: 600; color: var(--text-color);">
+                        <i class="fas fa-book-open"></i> Further Reading
+                    </summary>
+                    <div style="margin-top: 20px; color: var(--text-dark); line-height: 1.8;">
+
+                        <h4 style="color: var(--text-color); margin: 20px 0 10px;">The Silicon Proxy: Mind Mapped to Machine</h4>
+                        <p>
+                            Modern vision models share structural principles with biological vision: distributed representation, hierarchical feature extraction, and predictive coding. <em>Echoes of the Prior</em> exploits this analogy by treating a state-of-the-art 3D Gaussian Splatting model not as a renderer, but as a <em>cognitive proxy</em> &mdash; a silicon brain whose components map onto two streams of human perception:
+                        </p>
+                        <ul style="margin: 10px 0 10px 20px;">
+                            <li><strong>The Sensory Stream</strong> &mdash; A shallow CNN processes raw pixel input, capturing texture and local geometry of the <em>Now</em>. This mirrors the biological retina and primary visual cortex (V1).</li>
+                            <li><strong>The Memory Stream</strong> &mdash; A vision foundation model (DINOv2) encodes high-dimensional semantic priors &mdash; the machine's long-term memory of what the world <em>should</em> look like.</li>
+                        </ul>
+                        <p>In a healthy state, perception is the successful integration of these two streams. Our installation visualizes what happens when they decay.</p>
+
+                        <h4 style="color: var(--text-color); margin: 25px 0 10px;">Two Modes of Forgetting</h4>
+                        <p>
+                            We introduce two entropy operators that simulate distinct biological failure modes, grounded in the <em>Neural Gain Theory of Aging</em>:
+                        </p>
+                        <p>
+                            <strong>Sensory Decay ($\mathcal{G}_\text{sense}$)</strong> &mdash; Rather than degrading the input image, we corrupt the processing circuitry itself. Three mechanisms act on the CNN weights:
+                            (i) <em>Spectral Amnesia</em>: high-frequency filters are suppressed via FFT masking, simulating loss of visual acuity;
+                            (ii) <em>Neural Fabrication</em>: spatially coherent noise is injected, causing the machine to hallucinate phantom textures;
+                            (iii) <em>Structural Atrophy</em>: stochastic dropout zeroes out synaptic connections, rendering perception sparse and ghostly.
+                        </p>
+                        <p>
+                            <strong>Memory Decay ($\mathcal{F}_\text{mem}$)</strong> &mdash; Biological forgetting is not fading to black; it is the world turning <em>wrong</em>. We model this by applying a continuous orthogonal rotation to the semantic feature vectors, twisting the memory manifold while preserving signal strength. The machine continues to reconstruct confident geometries, but familiar objects become hallucinated topological variants &mdash; a building does not pixelate but <em>melts</em>. This creates what we term a <em>computational uncanny valley</em>: an intermediate decay zone (0.3 &lt; $\lambda$ &lt; 0.7) where representations are structurally strong yet semantically distorted, producing maximally disturbing imagery.
+                        </p>
+
+                        <figure style="margin: 25px auto; width: 70%; text-align: center;">
+                            <img src="assets/pipeline.png" alt="System Workflow" style="width: 100%; display: block; border-radius: 8px;">
+                            <figcaption style="font-size: 0.85rem; margin-top: 8px; color: var(--text-dark);">
+                                <strong>System Workflow.</strong> The user-controlled decay factor $\lambda$ intercepts the reconstruction process via two parallel paths: Sensory Decay (top) corrupts the CNN encoder weights, while Memory Decay (bottom) twists the semantic latent space, with optional Selective Forgetting targeting specific objects.
+                            </figcaption>
+                        </figure>
+
+                        <h4 style="color: var(--text-color); margin: 25px 0 10px;">Selective Forgetting</h4>
+                        <p>
+                            Human memory loss is often selective &mdash; we forget specific faces, names, or objects while the surrounding reality remains intact. Our system supports this through <em>object-oriented amnesia</em>: users can specify a target (e.g., "the woman in red") via text prompt, and entropy is surgically injected only into the corresponding latent tokens. The result is a world perfectly remembered except for one conspicuous absence &mdash; a ghost-shaped void.
+                        </p>
+
+                        <h4 style="color: var(--text-color); margin: 25px 0 10px;">Why 3D Gaussian Splatting?</h4>
+                        <p>
+                            We deliberately chose monocular depth reconstruction over generative 3D models. While generative approaches fabricate watertight, <em>solid</em> meshes by inventing unseen geometry, human memory is not a solid object &mdash; it is a <em>surface</em>, a facade. Our system produces a fragile 2.5D shell that appears coherent from the original viewpoint but reveals its hollowness when rotated. This <em>Potemkin village effect</em> is not a technical limitation but a deliberate aesthetic metaphor: memory is a thin film stretched over a void.
+                        </p>
+
+                    </div>
+                </details>
             </div>
         </div>
     </section>
