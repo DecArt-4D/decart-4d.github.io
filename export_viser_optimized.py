@@ -36,6 +36,7 @@ def export_single_pkl(
     use_fp16: bool = False,
     frame_step: int = 1,
     scale: float = 1.0,
+    camera_frustum_scale: float = 0.05,
     center_override: "np.ndarray | None" = None,
 ):
     """
@@ -278,7 +279,7 @@ def export_single_pkl(
             name="/camera",
             fov=1.0,
             aspect=float(frame["aspect"]),
-            scale=0.05,
+            scale=camera_frustum_scale,
             position=cam_pos_tuple,
             wxyz=cam_quat_tuple,
             image=img,
@@ -333,6 +334,7 @@ def export_project_dir(
     use_fp16: bool = False,
     frame_step: int = 1,
     scale: float = 1.0,
+    camera_frustum_scale: float = 0.05,
 ):
     """
     Export all decay levels from a project directory.
@@ -416,6 +418,7 @@ def export_project_dir(
                 use_fp16=use_fp16,
                 frame_step=frame_step,
                 scale=scale,
+                camera_frustum_scale=camera_frustum_scale,
                 center_override=shared_center,
             )
         except Exception as e:
@@ -477,6 +480,7 @@ def main():
     parser.add_argument("--fp16", action="store_true", help="Use float16 for point cloud coordinates (smaller files)")
     parser.add_argument("--frame-step", type=int, default=1, help="Take every Nth frame (e.g. 2 = keep half the frames)")
     parser.add_argument("--scale", type=float, default=1.0, help="Scale factor for scene (e.g. 0.125 to shrink 8x)")
+    parser.add_argument("--camera-frustum-scale", type=float, default=0.05, help="Scale of camera frustum visualization (default: 0.05)")
 
     args = parser.parse_args()
 
@@ -506,6 +510,7 @@ def main():
             use_fp16=use_fp16,
             frame_step=frame_step,
             scale=args.scale,
+            camera_frustum_scale=args.camera_frustum_scale,
         )
     elif args.input_dir:
         # Directory export
@@ -528,6 +533,7 @@ def main():
             use_fp16=use_fp16,
             frame_step=frame_step,
             scale=args.scale,
+            camera_frustum_scale=args.camera_frustum_scale,
         )
     else:
         parser.print_help()
