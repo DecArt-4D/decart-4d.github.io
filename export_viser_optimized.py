@@ -472,7 +472,7 @@ def main():
         help="Translate scene and camera by x,y,z (e.g. '0.1,-0.2,0')",
     )
     parser.add_argument("--decay-filter", type=str, help="Comma-separated decay values to export (e.g., '0.0,0.5,1.0')")
-    parser.add_argument("--no-gzip", action="store_true", help="Disable gzip compression")
+    parser.add_argument("--gzip", action="store_true", help="Enable gzip compression (default: off, viser uses zstd internally)")
     parser.add_argument("--downsample", type=float, default=1.0, help="Fraction of points to keep (0.0-1.0), e.g. 0.5 = 50%%")
     parser.add_argument("--fp16", action="store_true", help="Use float16 for point cloud coordinates (smaller files)")
     parser.add_argument("--frame-step", type=int, default=1, help="Take every Nth frame (e.g. 2 = keep half the frames)")
@@ -480,7 +480,7 @@ def main():
 
     args = parser.parse_args()
 
-    use_gzip = not args.no_gzip
+    use_gzip = args.gzip
     use_fp16 = args.fp16
     frame_step = args.frame_step
 
