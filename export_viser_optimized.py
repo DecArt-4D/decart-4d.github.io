@@ -348,9 +348,23 @@ def export_project_dir(
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # Compute shared center offset from decay_0.0 so all decay levels are aligned
+    # Compute shared center offset so all decay levels are aligned
     shared_center = None
-    if center_mode != "none":
+    if center_mode == "all_mean":
+        centers = []
+        for dd in decay_dirs:
+            pkl_p = os.path.join(dd, "viser_cache.pkl")
+            if not os.path.exists(pkl_p):
+                continue
+            with open(pkl_p, 'rb') as f:
+                frames = pickle.load(f)
+            pts = frames[0]["points"].astype(np.float32)
+            centers.append(pts.mean(axis=0))
+            del frames
+        if centers:
+            shared_center = np.mean(centers, axis=0)
+            print(f"Using shared center (mean of {len(centers)} decay levels): {shared_center}")
+    elif center_mode != "none":
         ref_pkl = os.path.join(decay_dirs[0], "viser_cache.pkl")
         if os.path.exists(ref_pkl):
             with open(ref_pkl, 'rb') as f:
@@ -435,8 +449,8 @@ def main():
         "--center",
         type=str,
         default="first_mean",
-        choices=["none", "first_bbox", "first_mean"],
-        help="Recenter scene to origin using first frame (bbox center or mean)",
+        choices=["none", "first_bbox", "first_mean", "all_mean"],
+        help="Recenter scene: first_bbox/first_mean use decay_0.0 frame[0]; all_mean averages frame[0] mean across all decay levels",
     )
     parser.add_argument(
         "--world-rot",
